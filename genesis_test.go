@@ -21,19 +21,18 @@ func TestLumeraGenesisSetup(t *testing.T) {
 		t.Skip("skipping genesis setup test in short mode")
 	}
 
-	// Choose version to test
-	version := V1_10_1
+	version := DefaultLumeraVersion
 	if v := os.Getenv("LUMERA_VERSION"); v != "" {
-		version = ChainVersion(v)
+		version = v
 	}
 	useLocal := os.Getenv("USE_LOCAL_IMAGE") == "true"
 
-	t.Run("Genesis_"+string(version), func(t *testing.T) {
+	t.Run("Genesis_"+version, func(t *testing.T) {
 		testGenesisSetup(t, version, useLocal)
 	})
 }
 
-func testGenesisSetup(t *testing.T, version ChainVersion, useLocalImage bool) {
+func testGenesisSetup(t *testing.T, version string, useLocalImage bool) {
 	ctx := context.Background()
 	rep := testreporter.NewNopReporter()
 	eRep := rep.RelayerExecReporter(t)
@@ -72,11 +71,11 @@ func testGenesisSetup(t *testing.T, version ChainVersion, useLocalImage bool) {
 	height, err := lumera.Height(ctx)
 	require.NoError(t, err)
 	require.Greater(t, height, int64(0), "Chain should be producing blocks")
-	t.Logf("✅ Chain started successfully at height %d", height)
+	t.Logf("Chain started successfully at height %d", height)
 
 	// Verify genesis was modified correctly
 	t.Run("VerifyGenesisModifications", func(t *testing.T) {
-		verifyGenesisModifications(t, ctx, lumera, version)
+		verifyGenesisModifications(t, ctx, lumera)
 	})
 
 	// Verify claims.csv is present
@@ -84,10 +83,10 @@ func testGenesisSetup(t *testing.T, version ChainVersion, useLocalImage bool) {
 		verifyClaimsCSV(t, ctx, lumera)
 	})
 
-	t.Logf("✅ All genesis setup tests passed for %s", version)
+	t.Logf("All genesis setup tests passed for %s", version)
 }
 
-func verifyGenesisModifications(t *testing.T, ctx context.Context, lumera *cosmos.CosmosChain, version ChainVersion) {
+func verifyGenesisModifications(t *testing.T, ctx context.Context, lumera *cosmos.CosmosChain) {
 	// Read genesis.json directly from the container (lumerad export can't run while node is running)
 	genesisPath := lumera.HomeDir() + "/config/genesis.json"
 	catCmd := []string{"cat", genesisPath}
@@ -110,7 +109,7 @@ func verifyGenesisModifications(t *testing.T, ctx context.Context, lumera *cosmo
 		mintParams := mint["params"].(map[string]interface{})
 		require.Equal(t, "ulume", mintParams["mint_denom"], "mint_denom should be ulume")
 
-		t.Logf("✅ Denoms configured correctly")
+		t.Logf("Denoms configured correctly")
 	})
 
 	// Verify core modules exist with params (using defaults from lumerad init)
@@ -119,7 +118,7 @@ func verifyGenesisModifications(t *testing.T, ctx context.Context, lumera *cosmo
 		require.True(t, ok, "action module should exist")
 		_, ok = action["params"].(map[string]interface{})
 		require.True(t, ok, "action params should exist")
-		t.Logf("✅ Action module present with params")
+		t.Logf("Action module present with params")
 	})
 
 	t.Run("SupernodeModule", func(t *testing.T) {
@@ -127,32 +126,22 @@ func verifyGenesisModifications(t *testing.T, ctx context.Context, lumera *cosmo
 		require.True(t, ok, "supernode module should exist")
 		_, ok = supernode["params"].(map[string]interface{})
 		require.True(t, ok, "supernode params should exist")
-		t.Logf("✅ Supernode module present with params")
+		t.Logf("Supernode module present with params")
 	})
 
 	// Verify NFT module is removed
 	t.Run("NFTModuleRemoved", func(t *testing.T) {
 		_, exists := appState["nft"]
 		require.False(t, exists, "NFT module should not exist")
-		t.Logf("✅ NFT module correctly removed")
+		t.Logf("NFT module correctly removed")
 	})
 
-	// Version-specific checks
-	switch version {
-	case V1_9_1:
-		t.Run("CrisisModule_v1.9.1", func(t *testing.T) {
-			_, exists := appState["crisis"]
-			require.True(t, exists, "Crisis module should exist in v1.9.1")
-			t.Logf("✅ Crisis module present (v1.9.1)")
-		})
-
-	case V1_10_1:
-		t.Run("CrisisModuleRemoved_v1.10.1", func(t *testing.T) {
-			_, exists := appState["crisis"]
-			require.False(t, exists, "Crisis module should not exist in v1.10.1")
-			t.Logf("✅ Crisis module correctly removed (v1.10.1)")
-		})
-	}
+	// Crisis module should be removed
+	t.Run("CrisisModuleRemoved", func(t *testing.T) {
+		_, exists := appState["crisis"]
+		require.False(t, exists, "Crisis module should not exist")
+		t.Logf("Crisis module correctly removed")
+	})
 }
 
 func verifyClaimsCSV(t *testing.T, ctx context.Context, lumera *cosmos.CosmosChain) {
@@ -163,10 +152,10 @@ func verifyClaimsCSV(t *testing.T, ctx context.Context, lumera *cosmos.CosmosCha
 	_, _, err := lumera.Exec(ctx, checkCmd, nil)
 
 	if err != nil {
-		t.Logf("⚠️  claims.csv not found in config directory (this may be expected)")
+		t.Logf("claims.csv not found in config directory (this may be expected)")
 		// Don't fail the test as claims.csv might not be required for all test scenarios
 	} else {
-		t.Logf("✅ claims.csv present in config directory")
+		t.Logf("claims.csv present in config directory")
 
 		// Count lines in claims.csv
 		countCmd := []string{"wc", "-l", lumera.HomeDir() + "/config/claims.csv"}
@@ -174,28 +163,5 @@ func verifyClaimsCSV(t *testing.T, ctx context.Context, lumera *cosmos.CosmosCha
 		if err == nil {
 			t.Logf("   claims.csv has %s", string(stdout))
 		}
-	}
-}
-
-// TestBothVersions tests both v1.9.1 and v1.10.1 genesis setup
-func TestBothVersions(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping multi-version test in short mode")
-	}
-
-	useLocal := os.Getenv("USE_LOCAL_IMAGE") == "true"
-	if useLocal {
-		t.Log("WARNING: USE_LOCAL_IMAGE=true tests both versions against the same local image; only one version will be accurate")
-	}
-
-	versions := []ChainVersion{V1_9_1, V1_10_1}
-
-	for _, version := range versions {
-		version := version // capture for parallel execution
-		t.Run(string(version), func(t *testing.T) {
-			// Can run in parallel if needed
-			// t.Parallel()
-			testGenesisSetup(t, version, useLocal)
-		})
 	}
 }

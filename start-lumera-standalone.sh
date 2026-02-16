@@ -66,10 +66,8 @@ TMP=/tmp/genesis_tmp.json
 # Remove NFT module
 jq "del(.app_state.nft)" "$GENESIS" > "$TMP" && mv "$TMP" "$GENESIS"
 
-# Version-specific: remove crisis module for v1.10.x
-if echo "$LUMERA_VERSION" | grep -q "^v1\.10"; then
-    jq "del(.app_state.crisis)" "$GENESIS" > "$TMP" && mv "$TMP" "$GENESIS"
-fi
+# Remove crisis module (removed since v1.10.x)
+jq "del(.app_state.crisis)" "$GENESIS" > "$TMP" && mv "$TMP" "$GENESIS"
 
 # Copy claims.csv and update total_claimable_amount to match
 if [ -f /tmp/claims.csv ] && [ -s /tmp/claims.csv ]; then
