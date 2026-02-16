@@ -23,7 +23,6 @@ import (
 	sdkcrypto "github.com/LumeraProtocol/sdk-go/pkg/crypto"
 
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
-	"github.com/cosmos/cosmos-sdk/crypto/hd"
 	gogoproto "github.com/cosmos/gogoproto/proto"
 	icatypes "github.com/cosmos/ibc-go/v10/modules/apps/27-interchain-accounts/types"
 )
@@ -52,20 +51,27 @@ func main() {
 
 	ctx := context.Background()
 
-	// Set up temporary keyring from mnemonic
+	// Set up a temporary keyring and import the mnemonic. This must be the
+	// same mnemonic used to create the test user on Osmosis — it derives the
+	// same key pair, which is needed to sign the cascade metadata.
 	tmpDir, err := os.MkdirTemp("", "buildpacket-keyring-*")
 	if err != nil {
 		fatal("create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	kr, err := sdkcrypto.NewMultiChainKeyring("lumera", "test", tmpDir)
+	kr, err := sdkcrypto.NewKeyring(sdkcrypto.KeyringParams{
+		AppName: "lumera",
+		Backend: "test",
+		Dir:     tmpDir,
+	})
 	if err != nil {
 		fatal("create keyring: %v", err)
 	}
 
 	keyName := "buildpacket-key"
-	_, err = kr.NewAccount(keyName, *mnemonic, "", hd.CreateHDPath(118, 0, 0).String(), hd.Secp256k1)
+	keyType := sdkcrypto.KeyTypeCosmos
+	_, err = kr.NewAccount(keyName, *mnemonic, "", keyType.HDPath(), keyType.SigningAlgo())
 	if err != nil {
 		fatal("import key from mnemonic: %v", err)
 	}
@@ -103,7 +109,10 @@ func main() {
 	}
 	defer func() { _ = cascadeClient.Close() }()
 
-	// Build MsgRequestAction with real cascade metadata
+	// Build MsgRequestAction with real cascade metadata.
+	// WithICACreatorAddress overrides the msg creator to be the ICA address
+	// (not the local lumera address), since the host chain will execute the
+	// message as the ICA.
 	uploadOpts := &cascade.UploadOptions{}
 	cascade.WithICACreatorAddress(*icaAddress)(uploadOpts)
 	cascade.WithAppPubkey(appPubkey)(uploadOpts)
@@ -114,7 +123,9 @@ func main() {
 	}
 	fmt.Fprintf(os.Stderr, "Built MsgRequestAction: creator=%s type=%s\n", msg.Creator, msg.ActionType)
 
-	// Pack into ICA packet data
+	// Pack the message into an ICA CosmosTx envelope. This is the format
+	// that the ICS-27 host module expects: a protobuf-encoded CosmosTx
+	// containing one or more sdk.Msg, base64-encoded into a JSON packet.
 	msgAny, err := ica.PackRequestAny(msg)
 	if err != nil {
 		fatal("PackRequestAny: %v", err)
@@ -128,7 +139,8 @@ func main() {
 		fatal("marshal CosmosTx: %v", err)
 	}
 
-	// Output ICA packet JSON to stdout
+	// Output ICA packet JSON to stdout. This matches the format expected by
+	// osmosisd tx interchain-accounts controller send-tx <connection> <packet-file>
 	fmt.Printf(`{"type":"TYPE_EXECUTE_TX","data":"%s","memo":""}`,
 		base64.StdEncoding.EncodeToString(cosmosTxBytes))
 }

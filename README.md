@@ -7,9 +7,8 @@ End-to-end testing for Lumera blockchain using [interchaintest](https://github.c
 This test suite provides:
 
 - **ICA (Interchain Accounts) testing** between Osmosis and Lumera
-- **Genesis configuration testing** for multiple Lumera versions
+- **Genesis configuration testing** for Lumera
 - **Local Docker image support** for testing unreleased changes
-- **Version-specific genesis modifications** (v1.9.1 vs v1.10.1)
 
 ## Quick Start
 
@@ -22,22 +21,17 @@ This test suite provides:
 ### Run Tests
 
 ```bash
-# Run all tests for v1.10.1 (default)
+# Run all tests (uses LUMERA_VERSION from Makefile, currently v1.10.1)
 make test
 
-# Run all tests for v1.9.1
-make test-v1.9.1
+# Override the version
+make test LUMERA_VERSION=v1.11.0
 
 # Genesis tests only
-make test-genesis-v1.10.1
-make test-genesis-v1.9.1
+make test-genesis
 
 # ICA tests only
-make test-ica-v1.10.1
-make test-ica-v1.9.1
-
-# Test both versions
-make test-all-versions
+make test-ica
 ```
 
 ## Using Local Docker Images
@@ -63,20 +57,17 @@ This builds `lumerad-local:latest` from your local lumera source code.
 ### 2. Run Tests with Local Image
 
 ```bash
-# All tests with local image (v1.10.1)
+# All tests with local image
 make test-local
 
-# Specific version with local image
-make test-v1.9.1-local
-make test-v1.10.1-local
-
 # Genesis only with local image
-make test-genesis-v1.9.1-local
-make test-genesis-v1.10.1-local
+make test-genesis-local
 
 # ICA only with local image
-make test-ica-v1.9.1-local
-make test-ica-v1.10.1-local
+make test-ica-local
+
+# Build + test in one step
+make full-test
 ```
 
 ## Testing Genesis Only
@@ -84,15 +75,11 @@ make test-ica-v1.10.1-local
 To test genesis configuration without running full ICA tests:
 
 ```bash
-# Test v1.10.1 genesis (default)
+# Test genesis
 make test-genesis
 
-# Test v1.9.1 genesis
-make test-genesis-v1.9.1
-
 # Test with local image
-make test-genesis-v1.10.1-local
-make test-genesis-v1.9.1-local
+make test-genesis-local
 ```
 
 This will:
@@ -100,87 +87,31 @@ This will:
 1. Start a Lumera chain with modified genesis
 2. Verify all genesis modifications are correct
 3. Check that claims.csv is present (if available)
-4. Run version-specific validation
-
-## Lumera Versions
-
-### v1.9.1 and Earlier
-
-- **Includes**: crisis module
-- **Consensus params**: Stored in legacy x/params module
-- **Modules**: action, supernode, ICA, PFM (no NFT)
-
-### v1.10.0 and v1.10.1
-
-- **Removed**: crisis module
-- **Consensus params**: Migrated to x/consensus module
-- **Modules**: action, supernode, ICA, PFM (no NFT)
 
 ## Genesis Modifications
 
-The test suite automatically modifies genesis for both versions:
+The test suite automatically modifies genesis:
 
-### Common Modifications (All Versions)
-
-**Action Module:**
-
-```json
-{
-  "base_action_fee": {"denom": "ulume", "amount": "10000"},
-  "max_actions_per_block": "10",
-  "min_super_nodes": "3",
-  "super_node_fee_share": "1.0"
-}
-```
-
-**Supernode Module:**
-
-```json
-{
-  "min_cpu_cores": "8",
-  "min_mem_gb": "16",
-  "min_storage_gb": "1000",
-  "metrics_update_interval_blocks": "400"
-}
-```
-
-**ICA Host:**
-
-- Enabled with allowlisted messages:
-  - `/lumera.action.v1.MsgRequestAction`
-  - `/lumera.action.v1.MsgApproveAction`
-  - Standard Cosmos messages (bank, staking, distribution)
-
-**Modules:**
-
-- ✅ Packet Forward Middleware (PFM)
-- ❌ NFT module (removed)
-
-### Version-Specific Modifications
-
-**v1.9.1:**
-
-- ✅ Crisis module present
-
-**v1.10.1:**
-
-- ❌ Crisis module removed
-- ✅ Consensus params in x/consensus
+- **Denoms**: `bond_denom` and `mint_denom` set to `ulume`
+- **ICA host**: Enabled with all message types allowed
+- **Crisis module**: Removed (not present since v1.10.x)
+- **NFT module**: Removed (unsupported)
+- **Consensus params**: Configured via x/consensus module
 
 ## Environment Variables
 
 | Variable | Default | Description |
 | -------- | ------- | ----------- |
 | `USE_LOCAL_IMAGE` | `false` | Use locally built Docker image |
-| `LUMERA_VERSION` | `v1.10.1` | Lumera version to test |
+| `LUMERA_VERSION` | `v1.10.1` | Lumera version to test (overridable in Makefile) |
 | `IMAGE_NAME` | `lumerad-local` | Local Docker image name |
-| `IMAGE_TAG` | `latest` | Local Docker image tag |
+| `IMAGE_TAG` | `local` | Local Docker image tag |
 
 ## Project Structure
 
 ```bash
 interchaintest/
-├── chain_config.go          # Unified chain configuration
+├── chain_config.go          # Chain configuration
 ├── ica_test.go              # ICA e2e tests
 ├── genesis_test.go          # Genesis verification tests
 ├── Dockerfile               # Lumerad Docker image
@@ -198,31 +129,20 @@ make help
 # Build local Docker image
 make build-docker
 
-# Run all tests (v1.10.1 by default)
+# Run all tests
 make test
 make test-local              # with local image
 
-# Version-specific tests (no env vars needed)
-make test-v1.9.1             # all tests for v1.9.1
-make test-v1.10.1            # all tests for v1.10.1
-make test-v1.9.1-local       # with local image
-make test-v1.10.1-local      # with local image
-
 # Genesis tests
-make test-genesis-v1.9.1
-make test-genesis-v1.10.1
-make test-genesis-v1.9.1-local
-make test-genesis-v1.10.1-local
+make test-genesis
+make test-genesis-local
 
 # ICA tests
-make test-ica-v1.9.1
-make test-ica-v1.10.1
-make test-ica-v1.9.1-local
-make test-ica-v1.10.1-local
+make test-ica
+make test-ica-local
 
-# Multi-version
-make test-all-versions       # test both versions
-make full-test               # build + test all versions locally
+# Build + test
+make full-test
 
 # Cleanup
 make clean-docker
@@ -247,10 +167,7 @@ make clean-docker build-docker
 
 ```bash
 # Test genesis modifications without full ICA flow
-make test-genesis-v1.10.1
-
-# Check specific version
-make test-genesis-v1.9.1
+make test-genesis
 ```
 
 ### Claims.csv Not Found
@@ -264,7 +181,7 @@ To verify:
 ./build-docker.sh
 
 # Test manually
-docker run --rm lumerad-local:latest ls -la /home/lumera/.lumera/config/
+docker run --rm lumerad-local:local ls -la /home/lumera/.lumera/config/
 ```
 
 ### ICA Tests Failing
@@ -281,8 +198,8 @@ make test-ica 2>&1 | tee test.log
 
 1. **Make changes to lumera source code**
 2. **Rebuild Docker image**: `make build-docker`
-3. **Test genesis**: `make test-genesis-v1.10.1-local`
-4. **Run full ICA tests**: `make test-ica-v1.10.1-local`
+3. **Test genesis**: `make test-genesis-local`
+4. **Run full ICA tests**: `make test-ica-local`
 
 ## CI/CD Integration
 
@@ -309,9 +226,8 @@ make test-ica 2>&1 | tee test.log
 When adding new tests:
 
 1. Update genesis modifications in `chain_config.go` if needed
-2. Add version-specific checks in `genesis_test.go`
+2. Add checks in `genesis_test.go`
 3. Update this README with new features
-4. Ensure tests pass for both v1.9.1 and v1.10.1
 
 ## Resources
 
