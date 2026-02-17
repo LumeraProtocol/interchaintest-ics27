@@ -12,30 +12,6 @@ This test suite provides:
 
 ## Quick Start
 
-### Prerequisites
-
-- Docker
-- Go 1.23+
-- Make (optional, for convenience commands)
-
-### Run Tests
-
-```bash
-# Run all tests (uses LUMERA_VERSION from Makefile, currently v1.10.1)
-make test
-
-# Override the version
-make test LUMERA_VERSION=v1.11.0
-
-# Genesis tests only
-make test-genesis
-
-# ICA tests only
-make test-ica
-```
-
-## Using Local Docker Images
-
 ### 1. Build Local Lumerad Image
 
 ```bash
@@ -46,13 +22,7 @@ make test-ica
 make build-docker
 ```
 
-This builds `lumerad-local:latest` from your local lumera source code.
-
-**Important**: The build script will:
-
-- Build lumerad from `../lumera/` directory
-- Include `claims.csv` in the image
-- Set up an entrypoint that copies `claims.csv` to `.lumera/config/` automatically
+This builds `lumerad-local:latest` using Lumerad binaries downloaded from github.
 
 ### 2. Run Tests with Local Image
 
@@ -70,19 +40,7 @@ make test-ica-local
 make full-test
 ```
 
-## Testing Genesis Only
-
-To test genesis configuration without running full ICA tests:
-
-```bash
-# Test genesis
-make test-genesis
-
-# Test with local image
-make test-genesis-local
-```
-
-This will:
+All tests will:
 
 1. Start a Lumera chain with modified genesis
 2. Verify all genesis modifications are correct
@@ -153,12 +111,6 @@ make clean-docker
 ### Docker Build Fails
 
 ```bash
-# Ensure lumera source is in the correct location
-ls -la ../lumera/
-
-# Check if claims.csv exists
-ls -la ../lumera/claims.csv
-
 # Rebuild from scratch
 make clean-docker build-docker
 ```
@@ -192,33 +144,6 @@ make test-genesis
 
 # Check logs for specific errors
 make test-ica 2>&1 | tee test.log
-```
-
-## Development Workflow
-
-1. **Make changes to lumera source code**
-2. **Rebuild Docker image**: `make build-docker`
-3. **Test genesis**: `make test-genesis-local`
-4. **Run full ICA tests**: `make test-ica-local`
-
-## CI/CD Integration
-
-```yaml
-# Example GitHub Actions workflow
-- name: Build Lumerad Docker
-  run: |
-    cd interchaintest
-    ./build-docker.sh
-
-- name: Run Genesis Tests
-  run: |
-    cd interchaintest
-    USE_LOCAL_IMAGE=true go test -v -run TestLumeraGenesisSetup
-
-- name: Run ICA Tests
-  run: |
-    cd interchaintest
-    USE_LOCAL_IMAGE=true go test -v -run TestOsmosisLumeraICA
 ```
 
 ## Contributing
